@@ -1,0 +1,289 @@
+{
+  "name": "Mind Atlas Weekly Report Public",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                5
+              ],
+              "triggerAtHour": 12,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -816,
+        -208
+      ],
+      "id": "f1251d5a-e999-4d1b-8de9-37d10e9f285a",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "[YOUR_NOTION_DATABASE_ID]",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -592,
+        -208
+      ],
+      "id": "1900e271-2ccb-42a5-af16-4fe7b4ceb3d2",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "[YOUR_NOTION_CREDENTIAL_ID]",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst now = new Date();\n\n// Week boundaries — last 7 days\nconst weekAgo = new Date(now);\nweekAgo.setDate(weekAgo.getDate() - 7);\n\n// Overdue threshold — 14 days ago\nconst twoWeeksAgo = new Date(now);\ntwoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);\n\n// Week label for report title\nconst weekLabel = weekAgo.toLocaleDateString('en-IN', { \n  day: '2-digit', \n  month: '2-digit', \n  year: 'numeric',\n  timeZone: 'Asia/Kolkata'\n});\n\n// Source Counts\nlet sourceCounts = {};\n\n// Status counts\nlet unread = 0, inProgress = 0, done = 0;\n\n// New this week\nlet newThisWeek = [];\n\n// Overdue — unread for more than 14 days\nlet overdueItems = [];\n\n// Tag frequency\nlet tagCounts = {};\n\nitems.forEach(item => {\n  const props = item.json;\n  \n  const status = props.property_status || \"\";\n  const savedOn = props.property_saved_on?.start \n    ? new Date(props.property_saved_on.start) \n    : null;\n  const title = props.property_title || props.name || \"Untitled\";\n  const url = props.property_url || \"\";\n  const tags = props.property_tags || [];\n  const source = props.property_source || \"\";\n\n  // Status counts\n  if (status === \"Unread\") unread++;\n  else if (status === \"In Progress\") inProgress++;\n  else if (status === \"Done\") done++;\n\n  // New this week + source counts — weekly only\n  if (savedOn && savedOn >= weekAgo) {\n    newThisWeek.push({ title, url, savedOn: savedOn.toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) });\n    if (!sourceCounts[source]) sourceCounts[source] = 0;\n    sourceCounts[source]++;\n  }\n\n  // Overdue — unread and saved more than 14 days ago\n  if (status === \"Unread\" && savedOn && savedOn < twoWeeksAgo) {\n    overdueItems.push({ title, url, savedOn: savedOn.toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) });\n  }\n\n  // Tag frequency\n  if (Array.isArray(tags)) {\n    tags.forEach(tag => {\n      const t = typeof tag === 'string' ? tag : tag?.name || \"\";\n      if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;\n    });\n  }\n});\n\n// Total and completion rate\nconst total = unread + inProgress + done;\nconst completionRate = total > 0 ? Math.round((done / total) * 100) : 0;\n\n// Top 5 tags sorted by frequency\nconst topTags = Object.entries(tagCounts)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([tag, count]) => `${tag} (${count})`)\n  .join(', ');\n\n// Format overdue details\nconst overdueDetails = overdueItems\n  .slice(0, 10)\n  .map(i => `• ${i.title} — saved ${i.savedOn}`)\n  .join('\\n');\n\n// Format new items details\nconst newItemsDetails = newThisWeek\n  .slice(0, 10)\n  .map(i => `• ${i.title} — ${i.savedOn}`)\n  .join('\\n');\n\nreturn [{\n  json: {\n    week_label: weekLabel,\n    total: total,\n    unread: unread,\n    in_progress: inProgress,\n    done: done,\n    completion_rate: completionRate,\n    new_this_week: newThisWeek.length,\n    overdue_count: overdueItems.length,\n    top_tags: topTags,\n    overdue_details: overdueDetails,\n    new_items_details: newItemsDetails,\n    youtube_count: sourceCounts['YouTube'] || 0,\n    instagram_count: sourceCounts['Instagram'] || 0,\n    linkedin_count: sourceCounts['LinkedIn'] || 0,\n    twitter_count: sourceCounts['Twitter/X'] || 0,\n    article_count: sourceCounts['Article'] || 0,\n    text_count: sourceCounts['Text'] || 0,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -208
+      ],
+      "id": "1dcd68fd-98b4-4471-876a-bd8c998dc144",
+      "name": "Metrics Calculation"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "[YOUR_NOTION_REPORT_DATABASE_ID]",
+          "mode": "id"
+        },
+        "title": "Weekly Report",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ \"Weekly Report — \" + $json.week_label }}"
+            },
+            {
+              "key": "Week of|date",
+              "date": "={{ $now }}"
+            },
+            {
+              "key": "Total Items|number",
+              "numberValue": "={{ $json.total }}"
+            },
+            {
+              "key": "New This Week|number",
+              "numberValue": "={{ $json.new_this_week }}"
+            },
+            {
+              "key": "Unread|number",
+              "numberValue": "={{ $json.unread }}"
+            },
+            {
+              "key": "In Progress|number",
+              "numberValue": "={{ $json.in_progress }}"
+            },
+            {
+              "key": "Done|number",
+              "numberValue": "={{ $json.done }}"
+            },
+            {
+              "key": "Completion Rate|number",
+              "numberValue": "={{ $json.completion_rate }}"
+            },
+            {
+              "key": "Overdue Items|number",
+              "numberValue": "={{ $json.overdue_count }}"
+            },
+            {
+              "key": "Top Tags|rich_text",
+              "richText": true,
+              "text": {
+                "text": [
+                  {
+                    "text": "={{ $json.top_tags }}",
+                    "annotationUi": {}
+                  }
+                ]
+              }
+            },
+            {
+              "key": "Overdue Details|rich_text",
+              "richText": true,
+              "text": {
+                "text": [
+                  {
+                    "text": "={{ $json.overdue_details }}",
+                    "annotationUi": {}
+                  }
+                ]
+              }
+            },
+            {
+              "key": "New Items Details|rich_text",
+              "richText": true,
+              "text": {
+                "text": [
+                  {
+                    "text": "={{ $json.new_items_details }}",
+                    "annotationUi": {}
+                  }
+                ]
+              }
+            },
+            {
+              "key": "YouTube Count|number",
+              "numberValue": "={{ $json.youtube_count }}"
+            },
+            {
+              "key": "Instagram Count|number",
+              "numberValue": "={{ $json.instagram_count }}"
+            },
+            {
+              "key": "LinkedIn Count|number",
+              "numberValue": "={{ $json.linkedin_count }}"
+            },
+            {
+              "key": "X Count|number",
+              "numberValue": "={{ $json.twitter_count }}"
+            },
+            {
+              "key": "Article Count|number",
+              "numberValue": "={{ $json.article_count }}"
+            },
+            {
+              "key": "Text Count|number",
+              "numberValue": "={{ $json.text_count }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        -208
+      ],
+      "id": "763319a1-7970-4d5b-b38b-d36044fd2b61",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "[YOUR_NOTION_CREDENTIAL_ID]",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot[YOUR_TELEGRAM_BOT_TOKEN]/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "[YOUR_TELEGRAM_CHAT_ID]"
+            },
+            {
+              "name": "text",
+              "value": "=📊 *Mind Atlas Weekly Report*\nWeek of {{ $('Metrics Calculation').first().json.week_label }}\n\n*Status Overview*\n✅ Done: {{ $('Metrics Calculation').first().json.done }}\n🔄 In Progress: {{ $('Metrics Calculation').first().json.in_progress }}\n📥 Unread: {{ $('Metrics Calculation').first().json.unread }}\n\n*This Week*\n🆕 Added: {{ $('Metrics Calculation').first().json.new_this_week }} items\n⚠️ Overdue (14+ days): {{ $('Metrics Calculation').first().json.overdue_count }} items\n📈 Completion Rate: {{ $('Metrics Calculation').first().json.completion_rate }}%\n\n*Top Tags*\n🏷️ {{ $('Metrics Calculation').first().json.top_tags }}\n\n*Sources This Week*\n▶️ YouTube: {{ $('Metrics Calculation').first().json.youtube_count }}\n📸 Instagram: {{ $('Metrics Calculation').first().json.instagram_count }}\n💼 LinkedIn: {{ $('Metrics Calculation').first().json.linkedin_count }}\n🐦 Twitter/X: {{ $('Metrics Calculation').first().json.twitter_count }}\n📰 Article: {{ $('Metrics Calculation').first().json.article_count }}\n💬 Text: {{ $('Metrics Calculation').first().json.text_count }}\n\nFull report saved to Notion ✓\n"
+            },
+            {
+              "name": "parse_mode",
+              "value": "Markdown"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        48,
+        -208
+      ],
+      "id": "8de0f7b0-af33-4008-b438-3765ebc95d9c",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Metrics Calculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metrics Calculation": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "f34d43a9-3f09-45d3-b6cd-04330fd066f3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "[YOUR_N8N_INSTANCE_ID]"
+  },
+  "id": "[YOUR_WORKFLOW_ID]",
+  "tags": []
+}

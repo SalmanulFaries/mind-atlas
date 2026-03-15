@@ -1,0 +1,1002 @@
+{
+  "name": "Knowledge Capture Pipeline Public",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1296,
+        -32
+      ],
+      "id": "6ef66aa0-f10e-4467-9f93-786b95ea8888",
+      "name": "Telegram Trigger",
+      "webhookId": "[YOUR_WEBHOOK_ID]",
+      "credentials": {
+        "telegramApi": {
+          "id": "[YOUR_TELEGRAM_CREDENTIAL_ID]",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d2fddd4c-d1c5-452a-b344-27d9aebee2e6",
+              "leftValue": "={{ $json.has_url }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -992,
+        -32
+      ],
+      "id": "32c2c8f1-68bb-44f0-bdf4-95b1be9c6e57",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.microlink.io/?url={{ encodeURIComponent($json.url) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -352,
+        -32
+      ],
+      "id": "31c19419-68b6-4b8e-bedc-c4c181d8acd2",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.first().json.message;\nconst text = message?.text || \"\";\nconst chatId = message?.chat?.id;\n\nconst urlRegex = /(https?:\\/\\/[^\\s]+)/g;\nconst urls = text.match(urlRegex);\n\nconst url = urls ? urls[0] : null;\nconst rawText = url ? text.replace(url, \"\").trim() : text;\n\n// Heuristic: if text without URL is longer than 60 characters\n// treat the whole message as text, not a URL capture\nconst isUrlOnly = url && rawText.length < 600;\n\nreturn [{\n  json: {\n    url: isUrlOnly ? url : null,\n    raw_text: text,\n    chat_id: chatId,\n    has_url: isUrlOnly\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        -32
+      ],
+      "id": "2c4c65ce-51e1-4dce-9b78-d0ccb6bf8854",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "[YOUR_NOTION_DATABASE_ID]",
+          "mode": "id"
+        },
+        "title": "Mind Atlas",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.title }}"
+            },
+            {
+              "key": "URL|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Saved on |date",
+              "date": "={{ $now }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ \"Unread\" }}"
+            },
+            {
+              "key": "Tags|multi_select",
+              "multiSelectValue": "={{ $json.tags.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        -224
+      ],
+      "id": "631316c5-7d37-412b-b92b-a4522ab2f12b",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "[YOUR_NOTION_CREDENTIAL_ID]",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $input.first().json.data?.url || $('Code').first().json.url || \"\";\nconst title = $input.first().json.data?.title || \"Untitled\";\nconst description = $input.first().json.data?.description || \"\";\nconst publisher = $input.first().json.data?.publisher || \"\";\nconst chatId = $('Code').first().json.chat_id;\nconst originalUrl = $('Code').first().json.url;\n\nlet source = \"Article\";\nif (originalUrl.includes(\"instagram.com\")) source = \"Instagram\";\nelse if (originalUrl.includes(\"youtube.com\") || originalUrl.includes(\"youtu.be\")) source = \"YouTube\";\nelse if (originalUrl.includes(\"twitter.com\") || originalUrl.includes(\"x.com\")) source = \"X\";\nelse if (originalUrl.includes(\"whatsapp.com\")) source = \"WhatsApp\";\nelse if (originalUrl.includes(\"linkedin.com\")) source = \"LinkedIn\";\n\nreturn [{\n  json: {\n    title: title,\n    description: description,\n    publisher: publisher,\n    url: originalUrl,\n    source: source,\n    chat_id: chatId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        -32
+      ],
+      "id": "238a11f3-2b25-481f-b0d9-e94c27c5a37b",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "[YOUR_NOTION_DATABASE_ID]",
+          "mode": "id"
+        },
+        "title": "Mind Atlas",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.title }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ \"Text\" }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ \"Unread\" }}"
+            },
+            {
+              "key": "Saved on |date",
+              "date": "={{ $now }}"
+            },
+            {
+              "key": "Tags|multi_select",
+              "multiSelectValue": "={{ $json.tags.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "492d5903-aefc-4b37-9f76-226e71c89a51",
+      "name": "Create a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "[YOUR_NOTION_CREDENTIAL_ID]",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.url }}",
+                    "rightValue": "youtube.com",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "bb813989-804e-40ed-96e6-9c6bf7b39d25"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "cd8f6ffd-0097-4ad1-a02a-881855f7d724",
+                    "leftValue": "={{ $json.url }}",
+                    "rightValue": "youtu.be",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -800,
+        -144
+      ],
+      "id": "8b8ecab0-d931-4523-9209-28f44b273c1e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $input.first().json.url;\nconst chatId = $input.first().json.chat_id;\n\n// Extract video ID from both youtube.com and youtu.be formats\nlet videoId = null;\n\nif (url.includes(\"youtu.be/\")) {\n  videoId = url.split(\"youtu.be/\")[1].split(\"?\")[0];\n} else if (url.includes(\"v=\")) {\n  videoId = url.split(\"v=\")[1].split(\"&\")[0];\n}\n\nreturn [{\n  json: {\n    video_id: videoId,\n    url: url,\n    chat_id: chatId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        -224
+      ],
+      "id": "25ba95b3-e4d8-4bdb-86a7-b3f80c4868da",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/youtube/v3/videos?id={{ $json.video_id }}&part=snippet&key=YOUR_YOUTUBE_API_KEY",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -352,
+        -224
+      ],
+      "id": "a3cce8d9-7dcc-4479-9b9e-4fe60de6b65f",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst snippet = data.items?.[0]?.snippet;\nconst chatId = $('Code').first().json.chat_id;\nconst url = $('Code').first().json.url;\n\nreturn [{\n  json: {\n    title: snippet?.title || \"Untitled\",\n    description: snippet?.description?.slice(0, 500) || \"\",\n    publisher: snippet?.channelTitle || \"YouTube\",\n    source: \"YouTube\",\n    url: url,\n    chat_id: chatId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        -224
+      ],
+      "id": "ff83a74f-e20f-4965-b2ee-50788fd44adc",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "[YOUR_NOTION_DATABASE_ID]",
+          "mode": "id"
+        },
+        "title": "=Mind Atlas",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.title }}"
+            },
+            {
+              "key": "URL|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Saved on |date",
+              "date": "={{ $now }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ \"Unread\" }}"
+            },
+            {
+              "key": "Tags|multi_select",
+              "multiSelectValue": "={{ $json.tags.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        -32
+      ],
+      "id": "a4048304-9e44-459a-89ff-e3845f840823",
+      "name": "Create a database page2",
+      "credentials": {
+        "notionApi": {
+          "id": "[YOUR_NOTION_CREDENTIAL_ID]",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot[YOUR_TELEGRAM_BOT_TOKEN]/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('Code').first().json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "=✅ Saved to Mind Atlas\n\nTitle: {{ $json.property_title }}\nSource: YouTube\nSummary: {{ $json.property_summary }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        704,
+        -224
+      ],
+      "id": "7d6ce7ca-b051-4611-9f75-27c7b59c568b",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot[YOUR_TELEGRAM_BOT_TOKEN]/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('Code').first().json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "=✅ Saved to Mind Atlas\n\nTitle: {{ $json.property_title }}\nSource: {{ $json.property_source }}\nSummary: {{ $json.property_summary }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        -32
+      ],
+      "id": "393b183e-9605-4634-add8-adb098d04ee9",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot[YOUR_TELEGRAM_BOT_TOKEN]/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('Code').first().json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "=✅ Saved to Mind Atlas\n\nTitle: {{ $json.property_title }}\nSource: Text\nSummary: {{ $json.property_summary }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        96,
+        176
+      ],
+      "id": "2b9741f3-2c6b-4444-9349-b097a35f88a7",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer [YOUR_GROQ_API_KEY]"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ $json.messages }}"
+            },
+            {
+              "name": "temperature",
+              "value": "={{ $json.temperature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        192,
+        -224
+      ],
+      "id": "427c7b63-df58-4dd4-85fb-2ef397964ef1",
+      "name": "HTTP Request5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawText = response.choices?.[0]?.message?.content || \"{}\";\n\nconst cleaned = rawText.replace(/```json|```/g, \"\").trim();\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = {\n    title: \"Untitled\",\n    summary: \"\",\n    tags: [],\n    content_type: \"\"\n  };\n}\n\nreturn [{\n  json: {\n    title: parsed.title || $('Code3').first().json.title,\n    summary: parsed.summary || \"\",\n    tags: parsed.tags || [],\n    content_type: parsed.content_type || \"\",\n    url: $('Code3').first().json.url,\n    source: \"YouTube\",\n    chat_id: $('Code').first().json.chat_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -224
+      ],
+      "id": "fbfe6bed-7b4c-4f37-86e4-6d207ff90330",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawText = response.choices?.[0]?.message?.content || \"{}\";\nconst cleaned = rawText.replace(/```json|```/g, \"\").trim();\n\nconst jsonMatch = cleaned.match(/\\{[\\s\\S]*\\}/);\nconst jsonString = jsonMatch ? jsonMatch[0] : \"{}\";\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(jsonString);\n} catch(e) {\n  parsed = {\n    title: \"Untitled\",\n    summary: \"\",\n    tags: [],\n    content_type: \"\"\n  };\n}\n\n// Handle both Jina branch and microlink branch\nlet titleFallback, url, source;\n\ntry {\n  titleFallback = $('Code10').first().json.title;\n  url = $('Code10').first().json.url;\n  source = $('Code10').first().json.source;\n} catch(e) {\n  titleFallback = $('Code1').first().json.title;\n  url = $('Code1').first().json.url;\n  source = $('Code1').first().json.source;\n}\n\nreturn [{\n  json: {\n    title: parsed.title || titleFallback,\n    summary: parsed.summary || \"\",\n    tags: parsed.tags || [],\n    content_type: parsed.content_type || \"\",\n    url: url,\n    source: source,\n    chat_id: $('Code').first().json.chat_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        -32
+      ],
+      "id": "c378ee44-537b-4f35-9f45-72aa4edd6706",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawText = response.choices?.[0]?.message?.content || \"{}\";\n\nconst cleaned = rawText.replace(/```json|```/g, \"\").trim();\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = {\n    title: \"Untitled\",\n    summary: \"\",\n    tags: [],\n    content_type: \"\"\n  };\n}\n\nreturn [{\n  json: {\n    title: parsed.title || \"Untitled Note\",\n    summary: parsed.summary || \"\",\n    tags: parsed.tags || [],\n    content_type: parsed.content_type || \"note\",\n    raw_text: $('Code').first().json.raw_text,\n    chat_id: $('Code').first().json.chat_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        176
+      ],
+      "id": "ba06ed8b-4ca5-4a90-8af6-92f3191269b5",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const title = $('Code3').first().json.title;\nconst description = $('Code3').first().json.description;\n\nconst prompt = `You are a JSON generator. You must return only valid JSON, nothing else.\n\nGiven this content:\nTitle: ${title}\nDescription: ${description}\nSource: YouTube\n\nReturn a JSON object with exactly these fields:\n- summary: a comprehensive summary of 2-4 sentences that captures the main topic, key points, and value of the video. Be specific — mention concepts, tools, or techniques discussed if present in the description. Do not use vague filler sentences.\n- tags: array of 2-4 topic tags in lowercase\n- content_type: one of these exact strings: \"tutorial\", \"news\", \"tool\", \"concept\", \"case-study\", \"opinion\"\n\nRules:\n- All string values must be in double quotes\n- No trailing commas\n- No text outside the JSON object\n- If the description is short or vague, infer context from the title\n\nExample output:\n{\n  \"summary\": \"Comprehensive summary of the video content based on title and description.\",\n  \"tags\": [\"tag1\", \"tag2\"],\n  \"content_type\": \"tutorial\"\n}`;\n\nreturn [{\n  json: {\n    model: \"llama-3.3-70b-versatile\",\n    messages: [\n      {\n        role: \"user\",\n        content: prompt\n      }\n    ],\n    temperature: 0.3\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -224
+      ],
+      "id": "24cb38e2-5e5c-456b-9cb2-e0d4ce1160bb",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer [YOUR_GROQ_API_KEY]"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ $json.messages }}"
+            },
+            {
+              "name": "temperature",
+              "value": "={{ $json.temperature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        544,
+        -32
+      ],
+      "id": "b042f693-f73f-447c-9b26-4f1becb7a092",
+      "name": "HTTP Request6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $('Code').first().json.raw_text;\n\nconst prompt = `You are a JSON generator. You must return only valid JSON, nothing else.\n\nGiven this text message:\n${rawText.slice(0, 3000)}\n\nReturn a JSON object with exactly these fields:\n- title: a short 5-7 word title summarising what this is about\n- summary: a comprehensive summary of 3-8 sentences that captures all key points, main ideas, and important details from the text. Do not truncate or oversimplify — preserve the substance of the original message.\n- tags: array of 2-4 topic tags in lowercase\n- content_type: one of these exact strings: \"note\", \"article\", \"tutorial\", \"news\", \"concept\", \"opinion\"\n\nRules:\n- All string values must be in double quotes\n- No trailing commas\n- No text outside the JSON object\n- The summary must be self-contained — the user should not need to refer back to the original text\n\nExample output:\n{\n  \"title\": \"Short descriptive title here\",\n  \"summary\": \"Comprehensive multi-sentence summary that captures all key points and details from the original message without losing important context or nuance.\",\n  \"tags\": [\"tag1\", \"tag2\"],\n  \"content_type\": \"note\"\n}`;\n\nreturn [{\n  json: {\n    model: \"llama-3.3-70b-versatile\",\n    messages: [\n      {\n        role: \"user\",\n        content: prompt\n      }\n    ],\n    temperature: 0.3\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        176
+      ],
+      "id": "547032d3-7cbd-49a1-b439-eab060392d65",
+      "name": "Code9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer [YOUR_GROQ_API_KEY]"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ $json.messages }}"
+            },
+            {
+              "name": "temperature",
+              "value": "={{ $json.temperature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -576,
+        176
+      ],
+      "id": "ee9234b1-d633-43d6-bf93-bc468449ed7d",
+      "name": "HTTP Request8"
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "text/markdown"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        16,
+        -32
+      ],
+      "id": "ebe48f7f-1421-4cbc-95d7-4937033df984",
+      "name": "HTTP Request7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jinaContent = $input.first().json.data || $input.first().json.body || \"\";\nconst source = $('Code1').first().json.source;\nconst url = $('Code1').first().json.url;\nconst title = $('Code1').first().json.title;\nconst chatId = $('Code').first().json.chat_id;\n\n// Truncate to 6000 characters — sufficient for Groq context\nconst truncated = jinaContent.slice(0, 6000);\n\nreturn [{\n  json: {\n    title: title,\n    content: truncated,\n    source: source,\n    url: url,\n    chat_id: chatId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -32
+      ],
+      "id": "da096055-dbd4-47cc-816e-ee6e1566235b",
+      "name": "Code10"
+    },
+    {
+      "parameters": {
+        "jsCode": "const title = $json.title;\nconst content = $json.content;\nconst source = $json.source;\n\nconst prompt = `You are a JSON generator. You must return only valid JSON, nothing else.\n\nGiven this content:\nTitle: ${title}\nFull Content: ${content}\nSource: ${source}\n\nReturn a JSON object with exactly these fields:\n- summary: string, 1-3 clean sentences, must be in double quotes\n- tags: array of 2-4 lowercase topic tag strings\n- content_type: one of these exact strings: \"tutorial\", \"news\", \"tool\", \"concept\", \"case-study\", \"opinion\"\n\nRules:\n- All string values must be in double quotes\n- No trailing commas\n- No text outside the JSON object\n- Base your summary and tags on the full content, not just the title\n\nExample output:\n{\n  \"summary\": \"A brief description of the content in one sentence.\",\n  \"tags\": [\"tag1\", \"tag2\"],\n  \"content_type\": \"news\"\n}`;\n\nreturn [{\n  json: {\n    model: \"llama-3.3-70b-versatile\",\n    messages: [\n      {\n        role: \"user\",\n        content: prompt\n      }\n    ],\n    temperature: 0.3\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "65ee8c8f-ae2f-4fd6-b19b-31350bf9a0ef",
+      "name": "Code11"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "Create a database page2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code9": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request8": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request7": {
+      "main": [
+        [
+          {
+            "node": "Code10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code10": {
+      "main": [
+        [
+          {
+            "node": "Code11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code11": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "9a274f80-2c9d-412c-ad3a-c872201528d4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "[YOUR_N8N_INSTANCE_ID]"
+  },
+  "id": "[YOUR_WORKFLOW_ID]",
+  "tags": []
+}
